@@ -102,7 +102,7 @@ async function processPage(
       });
 
       let firstId: string | null = null;
-      let upserted = 0;
+      const toUpsert: Array<[string, string, string, string | null]> = [];
 
       for (const [idx, row] of rows.entries()) {
         if (row.length < 4) continue;
@@ -115,20 +115,35 @@ async function processPage(
         if (idx === 0) firstId = inzynierId;
         if (!/^\d+$/.test(inzynierId) || !nazwisko) continue;
 
+        toUpsert.push([
+          inzynierId,
+          imie,
+          nazwisko,
+          DATE_REGEX.test(dataWpisu) ? dataWpisu : null,
+        ]);
+      }
+
+      if (toUpsert.length > 0) {
+        const values: string[] = [];
+        const params: (string | null)[] = [];
+        toUpsert.forEach((tuple, i) => {
+          const base = i * 4;
+          values.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, NOW())`);
+          params.push(...tuple);
+        });
         await db.query(
           `INSERT INTO ${TABLE} (inzynier_id, "imię", nazwisko, data_wpisu, ostatnio_widziany)
-           VALUES ($1, $2, $3, $4, NOW())
+           VALUES ${values.join(', ')}
            ON CONFLICT (inzynier_id)
            DO UPDATE SET "imię" = EXCLUDED."imię",
                          nazwisko = EXCLUDED.nazwisko,
                          data_wpisu = EXCLUDED.data_wpisu,
                          ostatnio_widziany = NOW()`,
-          [inzynierId, imie, nazwisko, DATE_REGEX.test(dataWpisu) ? dataWpisu : null],
+          params,
         );
-        upserted++;
       }
 
-      return { rowsProcessed: upserted, firstId };
+      return { rowsProcessed: toUpsert.length, firstId };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`⚠️ Błąd na str. ${pageNum} (próba ${attempt}/${MAX_RETRIES}): ${msg}`);

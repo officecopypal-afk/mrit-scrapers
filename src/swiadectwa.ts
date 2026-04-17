@@ -110,8 +110,7 @@ async function processPage(
         co2: (h) => h.includes('co2'),
       });
 
-      let inserted = 0;
-      let duplicates = 0;
+      const candidates: Array<(string | number | null)[]> = [];
 
       for (const row of rows) {
         if (row.length < MIN_COLUMNS_IN_ROW) continue;
@@ -119,15 +118,6 @@ async function processPage(
         const numerSche = get(row, colMap, 'numer_sche');
         const dataWystawienia = get(row, colMap, 'data');
         if (!numerSche || !DATE_REGEX.test(dataWystawienia)) continue;
-
-        const existing = await db.query(
-          `SELECT 1 FROM ${TABLE} WHERE numer_swiadectwa = $1 LIMIT 1`,
-          [numerSche],
-        );
-        if (existing.rowCount && existing.rowCount > 0) {
-          duplicates++;
-          continue;
-        }
 
         const wazneDo = get(row, colMap, 'wazne_do');
         const miejscowosc = get(row, colMap, 'miejscowosc');
@@ -155,33 +145,50 @@ async function processPage(
         const streetPart = addressParts.join(' ');
         const adresCaly = [streetPart, miejscowosc].filter(Boolean).join(', ');
 
-        await db.query(
+        candidates.push([
+          numerSche,
+          dataWystawienia,
+          DATE_REGEX.test(wazneDo) ? wazneDo : null,
+          miejscowosc,
+          ulica,
+          nrBudynku,
+          nrLokalu,
+          wojewodztwo,
+          powiat,
+          gmina,
+          adresCaly,
+          parseNumber(get(row, colMap, 'eu')),
+          parseNumber(get(row, colMap, 'ek')),
+          parseNumber(get(row, colMap, 'ep')),
+          parseNumber(uozeStr),
+          parseNumber(co2Str),
+        ]);
+      }
+
+      let inserted = 0;
+      if (candidates.length > 0) {
+        const cols = 16;
+        const values: string[] = [];
+        const params: (string | number | null)[] = [];
+        candidates.forEach((tuple, i) => {
+          const base = i * cols;
+          const placeholders = Array.from({ length: cols }, (_, j) => `$${base + j + 1}`);
+          values.push(`(${placeholders.join(', ')})`);
+          params.push(...tuple);
+        });
+        const result = await db.query(
           `INSERT INTO ${TABLE} (
              numer_swiadectwa, data_wystawienia, wazne_do, miejscowosc, ulica,
              nr_domu, nr_lokalu, wojewodztwo, powiat, gmina, adres_caly,
              wskaznik_eu, wskaznik_ek, wskaznik_ep, udzial_oze, emisja_co2
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-          [
-            numerSche,
-            dataWystawienia,
-            DATE_REGEX.test(wazneDo) ? wazneDo : null,
-            miejscowosc,
-            ulica,
-            nrBudynku,
-            nrLokalu,
-            wojewodztwo,
-            powiat,
-            gmina,
-            adresCaly,
-            parseNumber(get(row, colMap, 'eu')),
-            parseNumber(get(row, colMap, 'ek')),
-            parseNumber(get(row, colMap, 'ep')),
-            parseNumber(uozeStr),
-            parseNumber(co2Str),
-          ],
+           ) VALUES ${values.join(', ')}
+           ON CONFLICT (numer_swiadectwa) DO NOTHING
+           RETURNING numer_swiadectwa`,
+          params,
         );
-        inserted++;
+        inserted = result.rowCount ?? 0;
       }
+      const duplicates = candidates.length - inserted;
 
       return { inserted, duplicates, crashed: false };
     } catch (err) {
