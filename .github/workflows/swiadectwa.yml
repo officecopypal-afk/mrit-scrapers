@@ -12,7 +12,7 @@ on:
           - shadow
           - production
   # schedule:
-  #   - cron: '*/15 * * * *'  # co 15 min — odkomentować po weryfikacji shadow mode
+  #   - cron: '*/2 * * * *'  # co 2 minuty — odkomentować po weryfikacji shadow mode
 
 concurrency:
   group: scraper-swiadectwa

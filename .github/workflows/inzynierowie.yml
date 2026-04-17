@@ -12,7 +12,7 @@ on:
           - shadow
           - production
   # schedule:
-  #   - cron: '0 */6 * * *'  # co 6h — odkomentować po weryfikacji shadow mode
+  #   - cron: '0 6,15 * * *'  # 2×/dobę, UTC 06:00 i 15:00 (= PL 08:00/17:00 lato, 07:00/16:00 zima)
 
 concurrency:
   group: scraper-inzynierowie
