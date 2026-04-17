@@ -25,7 +25,6 @@ async function main() {
     await client.initSession();
     console.log('✅ Sesja zainicjowana');
 
-    const runStartedAt = new Date();
     let pageNum = 1;
     let lastFirstId = '';
     let lastPageWasFull = true;
@@ -66,10 +65,8 @@ async function main() {
     }
 
     if (stopReason === 'koniec_bazy') {
-      const cutoff = runStartedAt.toISOString();
       const deleteResult = await db.query(
-        `DELETE FROM ${TABLE} WHERE ostatnio_widziany < $1`,
-        [cutoff],
+        `DELETE FROM ${TABLE} WHERE ostatnio_widziany < (NOW() - INTERVAL '2 hours')`,
       );
       console.log(`🗑️ Wykreślono z bazy: ${deleteResult.rowCount}`);
       console.log(`✨ KONIEC — upserted ${totalUpserted}, deleted ${deleteResult.rowCount}`);
