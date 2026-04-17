@@ -12,16 +12,16 @@ on:
           - shadow
           - production
   schedule:
-    - cron: '*/5 * * * *'  # co 5 min — w środku pętla 3× scrape co 90s = realnie co 90s
+    - cron: '*/15 * * * *'  # co 15 min — w środku pętla ~45 min (scrape co 90s)
 
 concurrency:
   group: scraper-swiadectwa
-  cancel-in-progress: false
+  cancel-in-progress: true  # nowy cron cancel-uje stary — ciągła świeżość, bez queue piling
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 50
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SHADOW_MODE: ${{ github.event.inputs.mode == 'shadow' && '1' || '' }}
@@ -35,19 +35,24 @@ jobs:
 
       - run: npm ci
 
-      - name: Uruchom scraper w pętli (workflow_dispatch = 1x, cron = 3x co 90s)
+      - name: Uruchom scraper w pętli do deadline (~45 min dla schedule, 1x dla dispatch)
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            ITERATIONS=3
+            DEADLINE=$(($(date +%s) + 2700))  # 45 min from now
           else
-            ITERATIONS=1
+            DEADLINE=$(($(date +%s) + 10))    # ~1x dla dispatch
           fi
-          echo "🔁 Iterations: $ITERATIONS"
-          for i in $(seq 1 $ITERATIONS); do
-            echo "--- iteration $i/$ITERATIONS ---"
-            npm run scrape:swiadectwa
-            if [ $i -lt $ITERATIONS ]; then
-              echo "💤 sleep 90s..."
+          i=0
+          while [ $(date +%s) -lt $DEADLINE ]; do
+            i=$((i + 1))
+            echo "--- iteration $i @ $(date -u +%H:%M:%SZ) ---"
+            npm run scrape:swiadectwa || echo "⚠️ iteration failed (continuing)"
+            remaining=$((DEADLINE - $(date +%s)))
+            if [ $remaining -gt 90 ]; then
+              echo "💤 sleep 90s (remaining ${remaining}s)..."
               sleep 90
+            else
+              break
             fi
           done
+          echo "✅ DONE — $i iterations total"
