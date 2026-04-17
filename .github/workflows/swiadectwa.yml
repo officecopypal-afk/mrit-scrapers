@@ -12,7 +12,7 @@ on:
           - shadow
           - production
   schedule:
-    - cron: '*/2 * * * *'  # co 2 minuty
+    - cron: '*/15 * * * *'  # co 15 min — w środku pętla 9× scrape co 90s = realnie co 90s
 
 concurrency:
   group: scraper-swiadectwa
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 18
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SHADOW_MODE: ${{ github.event.inputs.mode == 'shadow' && '1' || '' }}
@@ -35,5 +35,19 @@ jobs:
 
       - run: npm ci
 
-      - name: Uruchom scraper
-        run: npm run scrape:swiadectwa
+      - name: Uruchom scraper w pętli (workflow_dispatch = 1x, cron = 9x co 90s)
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            ITERATIONS=9
+          else
+            ITERATIONS=1
+          fi
+          echo "🔁 Iterations: $ITERATIONS"
+          for i in $(seq 1 $ITERATIONS); do
+            echo "--- iteration $i/$ITERATIONS ---"
+            npm run scrape:swiadectwa
+            if [ $i -lt $ITERATIONS ]; then
+              echo "💤 sleep 90s..."
+              sleep 90
+            fi
+          done
