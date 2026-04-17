@@ -8,8 +8,13 @@ export function createDbPool(): pg.Pool {
     throw new Error('SUPABASE_DB_URL env variable is required');
   }
 
+  const stripped = connectionString
+    .replace(/([?&])sslmode=[^&]*/g, '$1')
+    .replace(/[?&]$/, '')
+    .replace(/\?&/, '?');
+
   return new Pool({
-    connectionString,
+    connectionString: stripped,
     ssl: { rejectUnauthorized: false },
     max: 5,
   });

@@ -1,7 +1,13 @@
-import { fetch } from 'undici';
+import { fetch, Agent, setGlobalDispatcher } from 'undici';
 import { CookieJar } from 'tough-cookie';
 import * as cheerio from 'cheerio';
 import { randomBytes } from 'node:crypto';
+
+setGlobalDispatcher(
+  new Agent({
+    connect: { rejectUnauthorized: false },
+  }),
+);
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
