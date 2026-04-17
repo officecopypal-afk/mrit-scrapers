@@ -28,6 +28,7 @@ async function main() {
     const runStartedAt = new Date();
     let pageNum = 1;
     let lastFirstId = '';
+    let lastPageWasFull = true;
     let stopReason: StopReason | null = null;
     let totalUpserted = 0;
 
@@ -52,13 +53,14 @@ async function main() {
       }
 
       if (rowsProcessed === 0) {
-        stopReason = pageNum > 500 ? 'koniec_bazy' : 'brak_rekordow';
+        stopReason = !lastPageWasFull || pageNum > 500 ? 'koniec_bazy' : 'brak_rekordow';
         console.log(`🛑 Zero rekordów na stronie ${pageNum} → ${stopReason}`);
         break;
       }
 
       console.log(`✔ Strona ${pageNum} — upsert ${rowsProcessed}`);
       if (firstId) lastFirstId = firstId;
+      lastPageWasFull = rowsProcessed >= 100;
       pageNum++;
       await sleep(PAGE_DELAY_MS);
     }
