@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 20
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      SHADOW_MODE: ${{ (github.event.inputs.mode == 'shadow' || github.event_name == 'schedule') && '1' || '' }}
+      SHADOW_MODE: ${{ github.event.inputs.mode == 'shadow' && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
 
