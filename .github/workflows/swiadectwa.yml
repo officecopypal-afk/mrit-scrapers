@@ -16,7 +16,7 @@ on:
 
 concurrency:
   group: scraper-swiadectwa
-  cancel-in-progress: true  # nowy cron cancel-uje stary — ciągła świeżość, bez queue piling
+  cancel-in-progress: false  # długi 45-min run nie może być przerwany przez tick cronu
 
 jobs:
   scrape:
