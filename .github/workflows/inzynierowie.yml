@@ -1,0 +1,39 @@
+name: Scraper inżynierów
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Tryb zapisu'
+        required: true
+        default: 'shadow'
+        type: choice
+        options:
+          - shadow
+          - production
+  # schedule:
+  #   - cron: '0 */6 * * *'  # co 6h — odkomentować po weryfikacji shadow mode
+
+concurrency:
+  group: scraper-inzynierowie
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SHADOW_MODE: ${{ (github.event.inputs.mode == 'shadow' || github.event_name == 'schedule') && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Uruchom scraper
+        run: npm run scrape:inzynierowie
