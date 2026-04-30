@@ -156,7 +156,27 @@ async function processPage(
   return { rowsProcessed: null, firstId: null };
 }
 
+/**
+ * Przejściowe błędy sieci (DNS/timeout) — MRiT chwilowo padło.
+ * Exit 0 → workflow OK, brak spamu maili przy każdym tickz pg_cron.
+ */
+function isTransientNetworkError(err: unknown): boolean {
+  const e = err as { cause?: { code?: string; hostname?: string }; code?: string; message?: string };
+  const code = e?.cause?.code || e?.code;
+  const TRANSIENT_CODES = ['EAI_AGAIN', 'ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE', 'UND_ERR_SOCKET'];
+  if (code && TRANSIENT_CODES.includes(code)) return true;
+  if (typeof e?.message === 'string' && /fetch failed/i.test(e.message)) return true;
+  return false;
+}
+
 main().catch((err) => {
+  if (isTransientNetworkError(err)) {
+    const e = err as { cause?: { code?: string; hostname?: string }; code?: string };
+    const code = e?.cause?.code || e?.code || 'UNKNOWN';
+    const host = e?.cause?.hostname || 'mrit.gov.pl';
+    console.warn(`⏸️ Przejściowy błąd sieci (${code} @ ${host}) — pomijam ten tick, retry za 60s.`);
+    process.exit(0);
+  }
   console.error('💥 Fatal:', err);
   process.exit(1);
 });

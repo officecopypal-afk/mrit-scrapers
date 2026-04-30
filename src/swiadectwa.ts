@@ -216,7 +216,40 @@ function parseNumber(value: string | null | undefined): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
+/**
+ * Wykrywa przejściowe błędy sieciowe (DNS, timeout, refused connection).
+ * Przy takich błędach — MRiT/DNS jest chwilowo niedostępne, NIE jest to bug w kodzie scrapera.
+ * Dlatego wychodzimy z kodem 0 (success) — żeby workflow nie wysyłał spamu maili
+ * przy każdym 60-sekundowym tickz pg_cron. Następny trigger sam się "pozbiera".
+ */
+function isTransientNetworkError(err: unknown): boolean {
+  const e = err as { cause?: { code?: string; hostname?: string }; code?: string; message?: string };
+  const code = e?.cause?.code || e?.code;
+  const TRANSIENT_CODES = [
+    'EAI_AGAIN',      // DNS server temporary failure
+    'ENOTFOUND',      // DNS hostname not found
+    'ECONNREFUSED',   // Server odmówił połączenia
+    'ECONNRESET',     // Połączenie zerwane przez peera
+    'ETIMEDOUT',      // Timeout TCP
+    'EHOSTUNREACH',   // Host unreachable
+    'ENETUNREACH',    // Network unreachable
+    'EPIPE',          // Broken pipe (peer zamknął)
+    'UND_ERR_SOCKET', // undici socket error
+  ];
+  if (code && TRANSIENT_CODES.includes(code)) return true;
+  // undici fetch — gdy DNS pada, zewnętrzny błąd to "TypeError: fetch failed"
+  if (typeof e?.message === 'string' && /fetch failed/i.test(e.message)) return true;
+  return false;
+}
+
 main().catch((err) => {
+  if (isTransientNetworkError(err)) {
+    const e = err as { cause?: { code?: string; hostname?: string }; code?: string };
+    const code = e?.cause?.code || e?.code || 'UNKNOWN';
+    const host = e?.cause?.hostname || 'rejestrcheb.mrit.gov.pl';
+    console.warn(`⏸️ Przejściowy błąd sieci (${code} @ ${host}) — pomijam ten tick, retry za 60s.`);
+    process.exit(0);
+  }
   console.error('💥 Fatal:', err);
   process.exit(1);
 });
